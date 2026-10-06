@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Intercom Matrix Pro - Teatro & Produções</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Bibliotecas externas para WebRTC e QR Code -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #e6edf3;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .stealth-mode {
+      background-color: #000000 !important;
+      filter: brightness(0.4) contrast(1.1);
+    }
+    .pulsing-tx {
+      animation: pulse-red 1s infinite alternate;
+    }
+    @keyframes pulse-red {
+      from { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+      to { box-shadow: 0 0 25px rgba(239, 68, 68, 0.9); }
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+
+  <!-- TOPO / CABEÇALHO -->
+  <header class="bg-[#161b22] border-b border-[#30363d] px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+    <div class="flex items-center space-x-3">
+      <span class="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+      <div>
+        <h1 class="text-sm md:text-base font-bold tracking-wider text-slate-100 flex items-center gap-2">
+          STAGE-COM <span class="text-xs bg-red-600/30 text-red-400 border border-red-500/40 px-1.5 py-0.5 rounded font-mono">MATRIX PRO</span>
+        </h1>
+        <p class="text-xs text-slate-400 font-mono" id="networkStatus">Sessão: <span id="sessionTag">INICIANDO...</span></p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <button id="btnBlackout" class="text-xs bg-[#21262d] hover:bg-[#30363d] text-slate-300 border border-[#30363d] px-3 py-1.5 rounded flex items-center gap-1.5 transition">
+        <span>🕶️</span> <span class="hidden sm:inline">Modo Coxia</span>
+      </button>
+      <button id="btnSoundEngine" class="text-xs bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-600/50 px-3 py-1.5 rounded transition font-mono">
+        🔊 Ativar Áudio
+      </button>
+    </div>
+  </header>
+
+  <!-- TELA DE SELEÇÃO INICIAL (SE NÃO DEFINIDO MODO) -->
+  <main id="viewSelection" class="flex-1 flex flex-col items-center justify-center p-4 max-w-lg mx-auto w-full">
+    <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-xl w-full shadow-2xl text-center space-y-6">
+      <div>
+        <div class="text-4xl mb-2">🎭</div>
+        <h2 class="text-xl font-bold text-slate-100">Painel de Comunicação</h2>
+        <p class="text-xs text-slate-400 mt-1">Selecione como este dispositivo será usado no espetáculo</p>
+      </div>
+
+      <div class="space-y-3">
+        <button id="btnStartDirector" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3.5 px-4 rounded-lg shadow-lg flex items-center justify-center gap-2 transition">
+          <span>🎛️</span>
+          <span>Abrir Mesa Central (Cabine / Diretor)</span>
+        </button>
+
+        <div class="relative py-2">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-[#30363d]"></div></div>
+          <div class="relative flex justify-center text-xs uppercase"><span class="bg-[#161b22] px-2 text-slate-500">Ou use como Beltpack</span></div>
+        </div>
+
+        <div class="space-y-2 text-left">
+          <label class="text-xs text-slate-400 block font-mono">Seu Setor de Trabalho:</label>
+          <select id="selectRoleQuick" class="w-full bg-[#0d1117] border border-[#30363d] text-slate-200 text-sm rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <!-- Canais dinâmicos inseridos aqui via JS -->
+          </select>
+          <button id="btnStartBeltpack" class="w-full bg-[#238636] hover:bg-[#2ea043] text-white font-semibold py-3 px-4 rounded-lg shadow-md flex items-center justify-center gap-2 transition mt-2">
+            <span>📱</span>
+            <span>Entrar como Beltpack Móvel</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODO CABINE / MATRIZ CENTRAL (DESKTOP / TABLET) -->
+  <section id="viewDirector" class="hidden flex-1 flex flex-col p-4 max-w-6xl mx-auto w-full gap-4">
+    <!-- BARRA DE CONTROLE MESTRE -->
+    <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center space-x-2">
+        <button id="btnMasterAllCall" class="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold text-sm px-5 py-2.5 rounded-md flex items-center gap-2 transition shadow-lg tracking-wider">
+          <span>📢</span> ALL CALL (CHAMADA GERAL)
+        </button>
+        <span class="text-xs text-slate-400 font-mono hidden md:inline">[Segure ESPAÇO no teclado]</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnOpenQrModal" class="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-200 text-xs px-3 py-2 rounded flex items-center gap-1.5 transition">
+          <span>📲</span> Conectar Celular da Equipe (QR)
+        </button>
+        <button id="btnOpenAddChannel" class="bg-[#238636] hover:bg-[#2ea043] text-white text-xs px-3 py-2 rounded flex items-center gap-1 transition font-medium">
+          <span>+</span> Novo Canal
+        </button>
+      </div>
+    </div>
+
+    <!-- GRADE DINÂMICA DE CANAIS -->
+    <div id="channelsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
+      <!-- Cards de canal inseridos dinamicamente -->
+    </div>
+
+    <!-- LOG DE DEIXAS E CHAMADAS -->
+    <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-2.5 h-28 flex flex-col">
+      <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-[#30363d] pb-1 mb-1">
+        <span>LOG TÉCNICO DE TRANSMISSÃO</span>
+        <button id="btnClearLog" class="hover:text-slate-200 underline">Limpar</button>
+      </div>
+      <div id="logConsole" class="flex-1 overflow-y-auto font-mono text-xs text-slate-300 space-y-0.5 custom-scroll">
+        <div class="text-slate-500">[00:00:00] Sistema inicializado. Aguardando conexões.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODO BELTPACK (CELULAR DO TÉCNICO / ATOR / CONTRARREGRA) -->
+  <section id="viewBeltpack" class="hidden flex-1 flex flex-col p-4 max-w-md mx-auto w-full justify-between pb-8">
+    <div class="bg-[#161b22] border border-[#30363d] p-4 rounded-xl text-center">
+      <div class="text-xs text-slate-400 uppercase tracking-widest font-mono">SEU POSTO ATUAL</div>
+      <div id="bpChannelTitle" class="text-2xl font-black text-indigo-400 mt-1">CANAL NÃO DEFINIDO</div>
+      <div id="bpChannelDesc" class="text-xs text-slate-400 mt-0.5 font-mono">Aguardando áudio</div>
+      <div class="mt-3 flex items-center justify-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="text-xs font-mono text-emerald-400" id="bpConnStatus">Conectado à Cabine</span>
+      </div>
+    </div>
+
+    <!-- BEACON DE ALERTA SILENCIOSO (CALL LIGHT) -->
+    <div id="bpCallBanner" class="hidden bg-amber-500 text-black font-bold p-3 rounded-lg text-center animate-bounce shadow-xl text-sm">
+      ⚠️ ALERTA DO DIRETOR: ATENÇÃO AO SEU POSTO!
+    </div>
+
+    <!-- BOTÃO PTT GIGANTE PARA OPERAÇÃO COM LUVAS OU ÀS CEGAS -->
+    <div class="flex flex-col items-center justify-center my-auto">
+      <button id="bpBtnPtt" class="w-64 h-64 rounded-full bg-[#21262d] border-4 border-indigo-600/60 active:bg-indigo-600 flex flex-col items-center justify-center text-white shadow-2xl transition-all duration-75 select-none touch-none">
+        <span class="text-5xl pointer-events-none">🎙️</span>
+        <span id="bpPttText" class="font-bold text-lg tracking-wider mt-2 pointer-events-none">SEGURE P/ FALAR</span>
+        <span class="text-[11px] text-slate-400 mt-1 pointer-events-none">PUSH-TO-TALK</span>
+      </button>
+      <div class="text-center mt-4">
+        <button id="bpBtnCallDirector" class="text-xs bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-amber-400 px-4 py-2 rounded-full font-mono transition">
+          🚨 Chamar Cabine (Call Light)
+        </button>
+      </div>
+    </div>
+
+    <!-- CONTROLE DE VOLUME DO FONE -->
+    <div class="bg-[#161b22] border border-[#30363d] p-3 rounded-lg flex items-center gap-3">
+      <span class="text-xs text-slate-400">🎧 Fone:</span>
+      <input type="range" id="bpVolSlider" min="0" max="1" step="0.05" value="0.9" class="w-full accent-indigo-500">
+    </div>
+  </section>
+
+  <!-- MODAL: QR CODE E LINK PARA A EQUIPE -->
+  <div id="modalQr" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-[#161b22] border border-[#30363d] rounded-xl max-w-sm w-full p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[#30363d] pb-2">
+        <h3 class="font-bold text-slate-100 text-sm">Conectar Celulares</h3>
+        <button id="btnCloseQr" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+      <p class="text-xs text-slate-300">
+        Peça para a equipe apontar a câmera do smartphone para o QR Code abaixo:
+      </p>
+      <div class="flex justify-center p-3 bg-white rounded-lg shadow-inner" id="qrcodeContainer"></div>
+      <div class="text-center">
+        <div class="text-[11px] text-slate-400 uppercase font-mono">Código da Sala</div>
+        <div class="text-xl font-bold font-mono tracking-widest text-indigo-400" id="displayRoomCode">TEATRO</div>
+      </div>
+      <button id="btnCopyLink" class="w-full bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-200 text-xs py-2 rounded transition">
+        📋 Copiar Link Direto
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO CANAL / EDITAR -->
+  <div id="modalAddChannel" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-[#161b22] border border-[#30363d] rounded-xl max-w-sm w-full p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[#30363d] pb-2">
+        <h3 class="font-bold text-slate-100 text-sm">Gerenciar Canais</h3>
+        <button id="btnCloseAddChannel" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">Nome do Setor / Equipe:</label>
+          <input type="text" id="newChannelName" placeholder="Ex: Canhão Seguidor 01" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded text-slate-100 outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Subtítulo / Descrição:</label>
+          <input type="text" id="newChannelDesc" placeholder="Ex: Operador no urdimento" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded text-slate-100 outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Ícone:</label>
+          <div class="flex gap-2">
+            <button type="button" class="btn-icon p-2 bg-[#0d1117] border border-indigo-500 rounded" data-icon="💡">💡</button>
+            <button type="button" class="btn-icon p-2 bg-[#0d1117] border border-[#30363d] rounded" data-icon="🎭">🎭</button>
+            <button type="button" class="btn-icon p-2 bg-[#0d1117] border border-[#30363d] rounded" data-icon="🔊">🔊</button>
+            <button type="button" class="btn-icon p-2 bg-[#0d1117] border border-[#30363d] rounded" data-icon="🚪">🚪</button>
+            <button type="button" class="btn-icon p-2 bg-[#0d1117] border border-[#30363d] rounded" data-icon="🎟️">🎟️</button>
+            <button type="button" class="btn-icon p-2 bg-[#0d1117] border border-[#30363d] rounded" data-icon="🎥">🎥</button>
+          </div>
+        </div>
+      </div>
+      <button id="btnSaveNewChannel" class="w-full bg-[#238636] hover:bg-[#2ea043] text-white text-xs font-semibold py-2.5 rounded transition">
+        Salvar Canal
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- ESTADO GERAL DA SESSÃO ---
+    const ROOM_KEY = "TEATRO_" + Math.random().toString(36).substring(2, 6).toUpperCase();
+    let currentRole = null; 
+    let activeChannelId = null;
+    let audioCtx = null;
+    let micStream = null;
+    let isBroadcasting = false;
+    let selectedIcon = "💡";
+
+    // Canais Padrão Iniciais
+    let channels = JSON.parse(localStorage.getItem("stage_intercom_channels")) || [
+      { id: "ch_stage", name: "Palco / Contra-Regra", desc: "Deixas de cena e contrarregras", icon: "🎭", color: "indigo" },
+      { id: "ch_light", name: "Cabine de Luz", desc: "Mesa DMX e efeitos", icon: "💡", color: "amber" },
+      { id: "ch_sound", name: "Cabine de Som", desc: "Mixagem de palco e trilhas", icon: "🔊", color: "cyan" },
+      { id: "ch_dressing", name: "Camarins / Elenco", desc: "Avisos de 15min e 5min", icon: "🚪", color: "purple" },
+      { id: "ch_boxoffice", name: "Bilheteria / Foyer", desc: "Sinal e casa aberta", icon: "🎟️", color: "emerald" }
+    ];
+
+    function saveChannels() {
+      localStorage.setItem("stage_intercom_channels", JSON.stringify(channels));
+      renderChannelsInDirector();
+      populateRoleSelector();
+    }
+
+    // --- SISTEMA DE ÁUDIO WEB (BEEPS DE RÁDIO E SQUELCH) ---
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      document.getElementById('btnSoundEngine').innerText = "🔊 Áudio Ativo";
+      document.getElementById('btnSoundEngine').classList.replace('bg-emerald-950/60', 'bg-emerald-600/40');
+      log("Motor de áudio ativado com sucesso.");
+    }
+
+    function playBeep(freq = 880, type = 'sine', duration = 0.08) {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.warn("Erro ao emitir som:", e);
+      }
+    }
+
+    function log(msg) {
+      const consoleEl = document.getElementById("logConsole");
+      if (!consoleEl) return;
+      const time = new Date().toTimeString().split(' ')[0];
+      const entry = document.createElement("div");
+      entry.innerHTML = `<span class="text-slate-500">[${time}]</span> ${msg}`;
+      consoleEl.prepend(entry);
+    }
+
+    // --- RENDERIZAÇÃO DA GRADE DE CANAIS (DIRETOR) ---
+    function renderChannelsInDirector() {
+      const grid = document.getElementById("channelsGrid");
+      if (!grid) return;
+      grid.innerHTML = "";
+
+      channels.forEach(ch => {
+        const card = document.createElement("div");
+        card.className = "bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-col justify-between hover:border-slate-600 transition shadow-sm relative overflow-hidden";
+        card.id = `card_${ch.id}`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xl p-1.5 bg-[#0d1117] rounded border border-[#30363d]">${ch.icon}</span>
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">${ch.name}</h4>
+                <p class="text-[11px] text-slate-400 font-mono">${ch.desc}</p>
+              </div>
+            </div>
+            <button onclick="deleteChannel('${ch.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1" title="Excluir Canal">🗑️</button>
+          </div>
+
+          <!-- VU e Status -->
+          <div class="my-3">
+            <div class="h-1.5 w-full bg-[#0d1117] rounded-full overflow-hidden flex">
+              <div id="vu_${ch.id}" class="h-full bg-emerald-500 w-0 transition-all duration-75"></div>
+            </div>
+          </div>
+
+          <!-- Ações do Canal -->
+          <div class="flex items-center gap-2 mt-1">
+            <button 
+              onmousedown="startPttTalk('${ch.id}')" 
+              onmouseup="stopPttTalk('${ch.id}')" 
+              ontouchstart="startPttTalk('${ch.id}')" 
+              ontouchend="stopPttTalk('${ch.id}')"
+              class="flex-1 bg-[#21262d] hover:bg-indigo-600 active:bg-indigo-500 text-slate-200 active:text-white font-bold text-xs py-2.5 rounded border border-[#30363d] active:border-indigo-400 transition flex items-center justify-center gap-1.5 select-none"
+            >
+              <span>🎙️</span> PTT FALAR
+            </button>
+            <button onclick="sendCallBeacon('${ch.id}')" class="bg-[#21262d] hover:bg-amber-600/30 text-amber-400 text-xs px-2.5 py-2.5 rounded border border-[#30363d] transition" title="Enviar Sinal Luminoso (Call)">
+              🚨 CALL
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function populateRoleSelector() {
+      const select = document.getElementById("selectRoleQuick");
+      if (!select) return;
+      select.innerHTML = "";
+      channels.forEach(ch => {
+        const opt = document.createElement("option");
+        opt.value = ch.id;
+        opt.innerText = `${ch.icon} ${ch.name}`;
+        select.appendChild(opt);
+      });
+    }
+
+    // --- CONTROLES DE PTT ---
+    window.startPttTalk = function(channelId) {
+      initAudio();
+      isBroadcasting = true;
+      playBeep(920, 'sine', 0.05); // chirp de ativação
+      
+      const targetName = channelId === 'ALL' ? 'CHAMADA GERAL (ALL)' : channels.find(c => c.id === channelId)?.name;
+      log(`🔴 Transmitindo para: <b>${targetName}</b>`);
+
+      const card = document.getElementById(`card_${channelId}`);
+      if (card) card.classList.add("border-red-500", "pulsing-tx");
+      
+      const vu = document.getElementById(`vu_${channelId}`);
+      if (vu) vu.style.width = "85%";
+    };
+
+    window.stopPttTalk = function(channelId) {
+      if (!isBroadcasting) return;
+      isBroadcasting = false;
+      playBeep(440, 'triangle', 0.04); // squelch release
+      
+      const card = document.getElementById(`card_${channelId}`);
+      if (card) card.classList.remove("border-red-500", "pulsing-tx");
+
+      const vu = document.getElementById(`vu_${channelId}`);
+      if (vu) vu.style.width = "0%";
+    };
+
+    window.sendCallBeacon = function(channelId) {
+      initAudio();
+      playBeep(1200, 'square', 0.2);
+      const ch = channels.find(c => c.id === channelId);
+      log(`⚠️ Sinal de CALL emitido para <b>${ch?.name}</b>`);
+      
+      // Simulação de resposta no Beltpack
+      const banner = document.getElementById("bpCallBanner");
+      if (banner && activeChannelId === channelId) {
+        banner.classList.remove("hidden");
+        setTimeout(() => banner.classList.add("hidden"), 3000);
+      }
+    };
+
+    window.deleteChannel = function(id) {
+      if (channels.length <= 1) {
+        alert("O sistema necessita de ao menos um canal ativo.");
+        return;
+      }
+      if (confirm("Deseja realmente remover este canal?")) {
+        channels = channels.filter(c => c.id !== id);
+        saveChannels();
+        log(`Canal removido da matriz.`);
+      }
+    };
+
+    // --- INICIALIZAÇÃO DE TELAS ---
+    document.getElementById("btnStartDirector").addEventListener("click", () => {
+      initAudio();
+      document.getElementById("viewSelection").classList.add("hidden");
+      document.getElementById("viewDirector").classList.remove("hidden");
+      document.getElementById("sessionTag").innerText = "CABINE MASTER";
+      renderChannelsInDirector();
+      generateQrCode();
+    });
+
+    document.getElementById("btnStartBeltpack").addEventListener("click", () => {
+      initAudio();
+      const roleId = document.getElementById("selectRoleQuick").value;
+      const ch = channels.find(c => c.id === roleId);
+      activeChannelId = roleId;
+
+      document.getElementById("viewSelection").classList.add("hidden");
+      document.getElementById("viewBeltpack").classList.remove("hidden");
+      document.getElementById("sessionTag").innerText = `BELTPACK: ${ch.name}`;
+      document.getElementById("bpChannelTitle").innerText = `${ch.icon} ${ch.name}`;
+      document.getElementById("bpChannelDesc").innerText = ch.desc;
+    });
+
+    // PTT do Beltpack
+    const bpPtt = document.getElementById("bpBtnPtt");
+    const bpPttEvents = {
+      start: () => {
+        initAudio();
+        bpPtt.classList.replace("bg-[#21262d]", "bg-red-600");
+        document.getElementById("bpPttText").innerText = "NO AR (TRANSMITINDO)";
+        playBeep(880, 'sine', 0.05);
+      },
+      end: () => {
+        bpPtt.classList.replace("bg-red-600", "bg-[#21262d]");
+        document.getElementById("bpPttText").innerText = "SEGURE P/ FALAR";
+        playBeep(440, 'triangle', 0.04);
+      }
+    };
+    bpPtt.addEventListener("mousedown", bpPttEvents.start);
+    bpPtt.addEventListener("mouseup", bpPttEvents.end);
+    bpPtt.addEventListener("touchstart", (e) => { e.preventDefault(); bpPttEvents.start(); });
+    bpPtt.addEventListener("touchend", (e) => { e.preventDefault(); bpPttEvents.end(); });
+
+    // Botão de Chamar Cabine do Beltpack
+    document.getElementById("bpBtnCallDirector").addEventListener("click", () => {
+      initAudio();
+      playBeep(1100, 'square', 0.15);
+      alert("Sinal de alerta enviado à cabine!");
+    });
+
+    // ALL CALL Pelo Teclado (Barra de Espaço)
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && !isBroadcasting && !document.getElementById("viewDirector").classList.contains("hidden")) {
+        e.preventDefault();
+        startPttTalk("ALL");
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space" && isBroadcasting) {
+        stopPttTalk("ALL");
+      }
+    });
+
+    // ALL CALL no Botão do Mouse
+    const btnMaster = document.getElementById("btnMasterAllCall");
+    btnMaster.addEventListener("mousedown", () => startPttTalk("ALL"));
+    btnMaster.addEventListener("mouseup", () => stopPttTalk("ALL"));
+
+    // --- GERADOR DE QR CODE ---
+    function generateQrCode() {
+      const container = document.getElementById("qrcodeContainer");
+      container.innerHTML = "";
+      const currentUrl = window.location.href;
+      new QRCode(container, {
+        text: currentUrl,
+        width: 180,
+        height: 180,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+      document.getElementById("displayRoomCode").innerText = ROOM_KEY;
+    }
+
+    // Modal QR
+    document.getElementById("btnOpenQrModal").addEventListener("click", () => {
+      document.getElementById("modalQr").classList.remove("hidden");
+    });
+    document.getElementById("btnCloseQr").addEventListener("click", () => {
+      document.getElementById("modalQr").classList.add("hidden");
+    });
+    document.getElementById("btnCopyLink").addEventListener("click", () => {
+      navigator.clipboard.writeText(window.location.href);
+      alert("Link copiado para a área de transferência!");
+    });
+
+    // Modal Criar Canal
+    document.getElementById("btnOpenAddChannel").addEventListener("click", () => {
+      document.getElementById("modalAddChannel").classList.remove("hidden");
+    });
+    document.getElementById("btnCloseAddChannel").addEventListener("click", () => {
+      document.getElementById("modalAddChannel").classList.add("hidden");
+    });
+    document.querySelectorAll(".btn-icon").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".btn-icon").forEach(b => b.classList.replace("border-indigo-500", "border-[#30363d]"));
+        btn.classList.replace("border-[#30363d]", "border-indigo-500");
+        selectedIcon = btn.getAttribute("data-icon");
+      });
+    });
+    document.getElementById("btnSaveNewChannel").addEventListener("click", () => {
+      const name = document.getElementById("newChannelName").value.trim();
+      const desc = document.getElementById("newChannelDesc").value.trim();
+      if (!name) {
+        alert("Preencha ao menos o nome da equipe.");
+        return;
+      }
+      const newCh = {
+        id: "ch_" + Date.now(),
+        name: name,
+        desc: desc || "Equipe técnica",
+        icon: selectedIcon,
+        color: "indigo"
+      };
+      channels.push(newCh);
+      saveChannels();
+      document.getElementById("modalAddChannel").classList.add("hidden");
+      document.getElementById("newChannelName").value = "";
+      document.getElementById("newChannelDesc").value = "";
+    });
+
+    // Blackout / Modo Coxia
+    document.getElementById("btnBlackout").addEventListener("click", () => {
+      document.body.classList.toggle("stealth-mode");
+    });
+
+    // Ativador Geral de Áudio
+    document.getElementById("btnSoundEngine").addEventListener("click", initAudio);
+
+    // Inicialização
+    populateRoleSelector();
+  </script>
+</body>
+</html>
